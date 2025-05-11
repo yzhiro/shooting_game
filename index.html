@@ -20,6 +20,8 @@
 </head>
 <body class="m-0 p-0 overflow-hidden bg-black">
 
+  <audio id="bgm" src="bgm/02 Start ~ Main BGM Lv 0.mp3" loop></audio>
+
   <div id="gameArea" class="relative w-screen h-screen bg-space overflow-hidden">
     <div class="absolute top-4 left-4 text-white text-xl z-50">
       <div id="score">スコア: 0</div>
@@ -44,6 +46,21 @@
     const lifeDisplay = $("#life");
     const shotSound = $("#shotSound")[0];
     const hitSound = $("#hitSound")[0];
+
+    const bgm = document.getElementById("bgm");
+let bgmStarted = false;
+
+document.addEventListener("keydown", (e) => {
+  if (!bgmStarted) {
+    bgm.volume = 0.6;
+    bgm.play();
+    bgmStarted = true;
+  }
+});
+
+ 
+
+
 
     let animationFrameId;
     let enemySpawnInterval;
