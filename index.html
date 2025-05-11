@@ -1,345 +1,381 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-  <meta charset="UTF-8" />
-  <title>グラディウス風ゲーム</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <style>
-    .bg-space {
-      background-image: url('https://www.transparenttextures.com/patterns/stardust.png');
-      background-size: cover;
-      animation: scrollBg 20s linear infinite;
-    }
-    @keyframes scrollBg {
-      from { background-position: 0 0; }
-      to { background-position: -1000px 0; }
-    }
-  </style>
-</head>
-<body class="m-0 p-0 overflow-hidden bg-black">
-
-  <audio id="bgm" src="bgm/02 Start ~ Main BGM Lv 0.mp3" loop></audio>
-
-  <div id="gameArea" class="relative w-screen h-screen bg-space overflow-hidden">
-    <div class="absolute top-4 left-4 text-white text-xl z-50">
-      <div id="score">スコア: 0</div>
-      <div id="life" class="mt-2">❤️❤️❤️</div>
-    </div>
-    <img id="player" src="img/player.png" class="absolute w-12 h-12 transition-transform duration-100 mix-blend-screen opacity-90" />
-  </div>
-
-  <div id="gameOverScreen" class="hidden fixed inset-0 bg-black bg-opacity-80 text-white flex flex-col items-center justify-center z-50">
-    <h1 class="text-3xl font-bold mb-4">ゲームオーバー！</h1>
-    <div id="ranking" class="mb-6 text-left"></div>
-    <button id="restartButton" class="bg-white text-black font-bold py-2 px-4 rounded">もう一度プレイ</button>
-  </div>
-
-  <audio id="shotSound" src="bgm/se_zushuun3.mp3"></audio>
-  <audio id="hitSound" src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"></audio>
-
-  <script>
-    const gameArea = $("#gameArea");
-    const player = $("#player");
-    const scoreDisplay = $("#score");
-    const lifeDisplay = $("#life");
-    const shotSound = $("#shotSound")[0];
-    const hitSound = $("#hitSound")[0];
-
-    const bgm = document.getElementById("bgm");
-let bgmStarted = false;
-
-document.addEventListener("keydown", (e) => {
-  if (!bgmStarted) {
-    bgm.volume = 0.6;
-    bgm.play();
-    bgmStarted = true;
-  }
-});
-
- 
-
-
-
-    let animationFrameId;
-    let enemySpawnInterval;
-    let bossFireInterval;
-    let gameState;
-
-    function initializeGameState() {
-      gameState = {
-        playerX: 100,
-        playerY: window.innerHeight / 2,
-        playerSpeed: 5,
-        bulletSpeed: 10,
-        enemySpeed: 2,
-        score: 0,
-        life: 3,
-        isGameOver: false,
-        bullets: [],
-        enemies: [],
-        enemyBullets: [],
-        bossBullets: [],
-        keys: {},
-        defeatedEnemies: 0,
-        bossActive: false,
-        boss: null,
-        bossHp: 30,
-        canShoot: true
-      };
-    }
-
-    $(document).keydown(e => gameState.keys[e.key] = true);
-    $(document).keyup(e => gameState.keys[e.key] = false);
-
-    function updatePlayer() {
-      const { keys, playerSpeed } = gameState;
-      if (keys["ArrowUp"] || keys["w"]) gameState.playerY -= playerSpeed;
-      if (keys["ArrowDown"] || keys["s"]) gameState.playerY += playerSpeed;
-      if (keys["ArrowLeft"] || keys["a"]) gameState.playerX -= playerSpeed;
-      if (keys["ArrowRight"] || keys["d"]) gameState.playerX += playerSpeed;
-      gameState.playerX = Math.max(0, Math.min(window.innerWidth - 48, gameState.playerX));
-      gameState.playerY = Math.max(0, Math.min(window.innerHeight - 48, gameState.playerY));
-      player.css({ left: gameState.playerX, top: gameState.playerY });
-    }
-
-    function shoot3Way(x, y) {
-      const dirs = [0, -2, 2];
-      dirs.forEach(dy => {
-        const bullet = $("<div>").addClass("absolute w-2 h-1 bg-yellow-300");
-        bullet.css({ left: x + 50, top: y + 20 });
-        bullet.data("dy", dy);
-        gameArea.append(bullet);
-        gameState.bullets.push(bullet);
-      });
-    }
-
-    $(document).keydown(function(e) {
-      if (e.key === " " && gameState.canShoot && !gameState.isGameOver) {
-        gameState.canShoot = false;
-        shoot3Way(gameState.playerX, gameState.playerY);
-        shotSound.currentTime = 0;
-        shotSound.play();
-        setTimeout(() => {
-          gameState.canShoot = true;
-        }, 200);
+  <head>
+    <meta charset="UTF-8" />
+    <title>グラディウス風ゲーム</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <style>
+      .bg-space {
+        background-image: url("https://www.transparenttextures.com/patterns/stardust.png");
+        background-size: cover;
+        animation: scrollBg 20s linear infinite;
       }
-    });
-    function startGame() {
-      player.css({ left: gameState.playerX, top: gameState.playerY });
-      lifeDisplay.text("❤️".repeat(gameState.life));
-      scoreDisplay.text(`スコア: ${gameState.score}`);
-
-      enemySpawnInterval = setInterval(() => {
-        if (gameState.isGameOver || gameState.bossActive) return;
-        const enemy = $("<img>").attr("src", "img/enemy.png").addClass("absolute w-10 h-10 mix-blend-screen opacity-90");
-        const top = Math.random() * (window.innerHeight - 30);
-        enemy.css({ left: window.innerWidth, top: top });
-        gameArea.append(enemy);
-        gameState.enemies.push(enemy);
-
-        // 敵の弾
-        setTimeout(() => {
-          if (!gameState.isGameOver && enemy.parent().length > 0) {
-            const bullet = $("<div>").addClass("absolute w-2 h-1 bg-pink-400");
-            bullet.css({ left: enemy.position().left, top: enemy.position().top + 20 });
-            gameArea.append(bullet);
-            gameState.enemyBullets.push(bullet);
-          }
-        }, 300);
-      }, 300);
-
-      function loop() {
-        if (gameState.isGameOver) return;
-        if (!gameState.bossActive && gameState.defeatedEnemies >= 50) spawnBoss();
-
-        updatePlayer();
-
-        // プレイヤーの弾移動
-        for (let i = gameState.bullets.length - 1; i >= 0; i--) {
-          const bullet = gameState.bullets[i];
-          let x = bullet.position().left + gameState.bulletSpeed;
-          let y = bullet.position().top + bullet.data("dy");
-          bullet.css({ left: x, top: y });
-          if (x > window.innerWidth || y < 0 || y > window.innerHeight) {
-            bullet.remove();
-            gameState.bullets.splice(i, 1);
-          }
+      @keyframes scrollBg {
+        from {
+          background-position: 0 0;
         }
+        to {
+          background-position: -1000px 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="m-0 p-0 overflow-hidden bg-black">
+    <audio id="bgm" src="bgm/02 Start ~ Main BGM Lv 0.mp3" loop></audio>
 
-        // 敵の移動と当たり判定
-        for (let i = gameState.enemies.length - 1; i >= 0; i--) {
-          const enemy = gameState.enemies[i];
-          let x = enemy.position().left - gameState.enemySpeed;
-          enemy.css("left", x);
+    <div
+      id="gameArea"
+      class="relative w-screen h-screen bg-space overflow-hidden"
+    >
+      <div class="absolute top-4 left-4 text-white text-xl z-50">
+        <div id="score">スコア: 0</div>
+        <div id="life" class="mt-2">❤️❤️❤️</div>
+      </div>
+      <img
+        id="player"
+        src="img/player.png"
+        class="absolute w-12 h-12 transition-transform duration-100 mix-blend-screen opacity-90"
+      />
+    </div>
 
-          if (x < -40) {
-            enemy.remove();
-            gameState.enemies.splice(i, 1);
-            continue;
-          }
+    <div
+      id="gameOverScreen"
+      class="hidden fixed inset-0 bg-black bg-opacity-80 text-white flex flex-col items-center justify-center z-50"
+    >
+      <h1 class="text-3xl font-bold mb-4">ゲームオーバー！</h1>
+      <div id="ranking" class="mb-6 text-left"></div>
+      <button
+        id="restartButton"
+        class="bg-white text-black font-bold py-2 px-4 rounded"
+      >
+        もう一度プレイ
+      </button>
+    </div>
 
-          // 敵とプレイヤーの衝突
-          if (isColliding(player, enemy)) {
-            enemy.remove();
-            gameState.enemies.splice(i, 1);
-            hitSound.play();
-            gameState.life--;
-            lifeDisplay.text("❤️".repeat(gameState.life));
-            if (gameState.life <= 0) return gameOver();
-            continue;
-          }
+    <audio id="shotSound" src="bgm/se_zushuun3.mp3"></audio>
+    <audio
+      id="hitSound"
+      src="https://actions.google.com/sounds/v1/cartoon/cartoon_boing.ogg"
+    ></audio>
 
-          // 敵と弾の衝突
-          for (let j = gameState.bullets.length - 1; j >= 0; j--) {
-            const bullet = gameState.bullets[j];
-            if (isColliding(bullet, enemy)) {
-              bullet.remove();
-              enemy.remove();
-              gameState.bullets.splice(j, 1);
-              gameState.enemies.splice(i, 1);
-              gameState.score += 100;
-              gameState.defeatedEnemies++;
-              scoreDisplay.text(`スコア: ${gameState.score}`);
-              break;
+    <script>
+      const gameArea = $("#gameArea");
+      const player = $("#player");
+      const scoreDisplay = $("#score");
+      const lifeDisplay = $("#life");
+      const shotSound = $("#shotSound")[0];
+      const hitSound = $("#hitSound")[0];
+
+      const bgm = document.getElementById("bgm");
+      let bgmStarted = false;
+
+      document.addEventListener("keydown", (e) => {
+        if (!bgmStarted) {
+          bgm.volume = 0.6;
+          bgm.play();
+          bgmStarted = true;
+        }
+      });
+
+      let animationFrameId;
+      let enemySpawnInterval;
+      let bossFireInterval;
+      let gameState;
+
+      function initializeGameState() {
+        gameState = {
+          playerX: 100,
+          playerY: window.innerHeight / 2,
+          playerSpeed: 5,
+          bulletSpeed: 10,
+          enemySpeed: 2,
+          score: 0,
+          life: 3,
+          isGameOver: false,
+          bullets: [],
+          enemies: [],
+          enemyBullets: [],
+          bossBullets: [],
+          keys: {},
+          defeatedEnemies: 0,
+          bossActive: false,
+          boss: null,
+          bossHp: 30,
+          canShoot: true,
+        };
+      }
+
+      $(document).keydown((e) => (gameState.keys[e.key] = true));
+      $(document).keyup((e) => (gameState.keys[e.key] = false));
+
+      function updatePlayer() {
+        const { keys, playerSpeed } = gameState;
+        if (keys["ArrowUp"] || keys["w"]) gameState.playerY -= playerSpeed;
+        if (keys["ArrowDown"] || keys["s"]) gameState.playerY += playerSpeed;
+        if (keys["ArrowLeft"] || keys["a"]) gameState.playerX -= playerSpeed;
+        if (keys["ArrowRight"] || keys["d"]) gameState.playerX += playerSpeed;
+        gameState.playerX = Math.max(
+          0,
+          Math.min(window.innerWidth - 48, gameState.playerX)
+        );
+        gameState.playerY = Math.max(
+          0,
+          Math.min(window.innerHeight - 48, gameState.playerY)
+        );
+        player.css({ left: gameState.playerX, top: gameState.playerY });
+      }
+
+      function shoot3Way(x, y) {
+        const dirs = [0, -2, 2];
+        dirs.forEach((dy) => {
+          const bullet = $("<div>").addClass("absolute w-2 h-1 bg-yellow-300");
+          bullet.css({ left: x + 50, top: y + 20 });
+          bullet.data("dy", dy);
+          gameArea.append(bullet);
+          gameState.bullets.push(bullet);
+        });
+      }
+
+      $(document).keydown(function (e) {
+        if (e.key === " " && gameState.canShoot && !gameState.isGameOver) {
+          gameState.canShoot = false;
+          shoot3Way(gameState.playerX, gameState.playerY);
+          shotSound.currentTime = 0;
+          shotSound.play();
+          setTimeout(() => {
+            gameState.canShoot = true;
+          }, 200);
+        }
+      });
+      function startGame() {
+        player.css({ left: gameState.playerX, top: gameState.playerY });
+        lifeDisplay.text("❤️".repeat(gameState.life));
+        scoreDisplay.text(`スコア: ${gameState.score}`);
+
+        enemySpawnInterval = setInterval(() => {
+          if (gameState.isGameOver || gameState.bossActive) return;
+          const enemy = $("<img>")
+            .attr("src", "img/enemy.png")
+            .addClass("absolute w-10 h-10 mix-blend-screen opacity-90");
+          const top = Math.random() * (window.innerHeight - 30);
+          enemy.css({ left: window.innerWidth, top: top });
+          gameArea.append(enemy);
+          gameState.enemies.push(enemy);
+
+          // 敵の弾
+          setTimeout(() => {
+            if (!gameState.isGameOver && enemy.parent().length > 0) {
+              const bullet = $("<div>").addClass(
+                "absolute w-2 h-1 bg-pink-400"
+              );
+              bullet.css({
+                left: enemy.position().left,
+                top: enemy.position().top + 20,
+              });
+              gameArea.append(bullet);
+              gameState.enemyBullets.push(bullet);
             }
-          }
-        }
+          }, 300);
+        }, 300);
 
-        // 敵弾の移動と衝突
-        for (let i = gameState.enemyBullets.length - 1; i >= 0; i--) {
-          const bullet = gameState.enemyBullets[i];
-          const x = bullet.position().left - 6;
-          bullet.css("left", x);
-          if (isColliding(player, bullet)) {
-            bullet.remove();
-            gameState.enemyBullets.splice(i, 1);
-            hitSound.play();
-            gameState.life--;
-            lifeDisplay.text("❤️".repeat(gameState.life));
-            if (gameState.life <= 0) return gameOver();
-            continue;
-          }
-          if (x < -10) {
-            bullet.remove();
-            gameState.enemyBullets.splice(i, 1);
-          }
-        }
+        function loop() {
+          if (gameState.isGameOver) return;
+          if (!gameState.bossActive && gameState.defeatedEnemies >= 50)
+            spawnBoss();
 
-        // ボス弾の移動と衝突
-        for (let i = gameState.bossBullets.length - 1; i >= 0; i--) {
-          const bullet = gameState.bossBullets[i];
-          const x = bullet.position().left - 6;
-          const y = bullet.position().top + bullet.data("dy");
-          bullet.css({ left: x, top: y });
-          if (isColliding(player, bullet)) {
-            bullet.remove();
-            gameState.bossBullets.splice(i, 1);
-            hitSound.play();
-            gameState.life--;
-            lifeDisplay.text("❤️".repeat(gameState.life));
-            if (gameState.life <= 0) return gameOver();
-            continue;
-          }
-          if (x < -10 || y < 0 || y > window.innerHeight) {
-            bullet.remove();
-            gameState.bossBullets.splice(i, 1);
-          }
-        }
+          updatePlayer();
 
-        // プレイヤー弾とボスの衝突
-        if (gameState.boss && gameState.bossActive) {
+          // プレイヤーの弾移動
           for (let i = gameState.bullets.length - 1; i >= 0; i--) {
             const bullet = gameState.bullets[i];
-            if (isColliding(bullet, gameState.boss)) {
+            let x = bullet.position().left + gameState.bulletSpeed;
+            let y = bullet.position().top + bullet.data("dy");
+            bullet.css({ left: x, top: y });
+            if (x > window.innerWidth || y < 0 || y > window.innerHeight) {
               bullet.remove();
               gameState.bullets.splice(i, 1);
-              gameState.bossHp--;
-              if (gameState.bossHp <= 0) {
-                clearInterval(bossFireInterval);
-                gameState.boss.remove();
-                gameState.boss = null;
-                gameState.bossActive = false;
-                gameState.defeatedEnemies = 0;
-                gameState.score += 3000;
+            }
+          }
+
+          // 敵の移動と当たり判定
+          for (let i = gameState.enemies.length - 1; i >= 0; i--) {
+            const enemy = gameState.enemies[i];
+            let x = enemy.position().left - gameState.enemySpeed;
+            enemy.css("left", x);
+
+            if (x < -40) {
+              enemy.remove();
+              gameState.enemies.splice(i, 1);
+              continue;
+            }
+
+            // 敵とプレイヤーの衝突
+            if (isColliding(player, enemy)) {
+              enemy.remove();
+              gameState.enemies.splice(i, 1);
+              hitSound.play();
+              gameState.life--;
+              lifeDisplay.text("❤️".repeat(gameState.life));
+              if (gameState.life <= 0) return gameOver();
+              continue;
+            }
+
+            // 敵と弾の衝突
+            for (let j = gameState.bullets.length - 1; j >= 0; j--) {
+              const bullet = gameState.bullets[j];
+              if (isColliding(bullet, enemy)) {
+                bullet.remove();
+                enemy.remove();
+                gameState.bullets.splice(j, 1);
+                gameState.enemies.splice(i, 1);
+                gameState.score += 100;
+                gameState.defeatedEnemies++;
                 scoreDisplay.text(`スコア: ${gameState.score}`);
+                break;
               }
             }
           }
+
+          // 敵弾の移動と衝突
+          for (let i = gameState.enemyBullets.length - 1; i >= 0; i--) {
+            const bullet = gameState.enemyBullets[i];
+            const x = bullet.position().left - 6;
+            bullet.css("left", x);
+            if (isColliding(player, bullet)) {
+              bullet.remove();
+              gameState.enemyBullets.splice(i, 1);
+              hitSound.play();
+              gameState.life--;
+              lifeDisplay.text("❤️".repeat(gameState.life));
+              if (gameState.life <= 0) return gameOver();
+              continue;
+            }
+            if (x < -10) {
+              bullet.remove();
+              gameState.enemyBullets.splice(i, 1);
+            }
+          }
+
+          // ボス弾の移動と衝突
+          for (let i = gameState.bossBullets.length - 1; i >= 0; i--) {
+            const bullet = gameState.bossBullets[i];
+            const x = bullet.position().left - 6;
+            const y = bullet.position().top + bullet.data("dy");
+            bullet.css({ left: x, top: y });
+            if (isColliding(player, bullet)) {
+              bullet.remove();
+              gameState.bossBullets.splice(i, 1);
+              hitSound.play();
+              gameState.life--;
+              lifeDisplay.text("❤️".repeat(gameState.life));
+              if (gameState.life <= 0) return gameOver();
+              continue;
+            }
+            if (x < -10 || y < 0 || y > window.innerHeight) {
+              bullet.remove();
+              gameState.bossBullets.splice(i, 1);
+            }
+          }
+
+          // プレイヤー弾とボスの衝突
+          if (gameState.boss && gameState.bossActive) {
+            for (let i = gameState.bullets.length - 1; i >= 0; i--) {
+              const bullet = gameState.bullets[i];
+              if (isColliding(bullet, gameState.boss)) {
+                bullet.remove();
+                gameState.bullets.splice(i, 1);
+                gameState.bossHp--;
+                if (gameState.bossHp <= 0) {
+                  clearInterval(bossFireInterval);
+                  gameState.boss.remove();
+                  gameState.boss = null;
+                  gameState.bossActive = false;
+                  gameState.defeatedEnemies = 0;
+                  gameState.score += 3000;
+                  scoreDisplay.text(`スコア: ${gameState.score}`);
+                }
+              }
+            }
+          }
+
+          animationFrameId = requestAnimationFrame(loop);
         }
 
-        animationFrameId = requestAnimationFrame(loop);
+        loop();
+      }
+      function isColliding($a, $b) {
+        const a = $a[0].getBoundingClientRect();
+        const b = $b[0].getBoundingClientRect();
+        return (
+          a.left < b.right &&
+          a.right > b.left &&
+          a.top < b.bottom &&
+          a.bottom > b.top
+        );
       }
 
-      loop();
-    }
-    function isColliding($a, $b) {
-      const a = $a[0].getBoundingClientRect();
-      const b = $b[0].getBoundingClientRect();
-      return (
-        a.left < b.right &&
-        a.right > b.left &&
-        a.top < b.bottom &&
-        a.bottom > b.top
-      );
-    }
+      function spawnBoss() {
+        const boss = $("<img>")
+          .attr("src", "img/boss.png")
+          .addClass("absolute w-32 h-32 mix-blend-screen opacity-90");
+        const top = window.innerHeight / 2 - 64;
+        boss.css({ left: window.innerWidth - 120, top: top });
+        gameArea.append(boss);
+        gameState.bossActive = true;
+        gameState.boss = boss;
+        gameState.bossHp = 30;
 
-    function spawnBoss() {
-      const boss = $("<img>").attr("src", "img/boss.png").addClass("absolute w-32 h-32 mix-blend-screen opacity-90");
-      const top = window.innerHeight / 2 - 64;
-      boss.css({ left: window.innerWidth - 120, top: top });
-      gameArea.append(boss);
-      gameState.bossActive = true;
-      gameState.boss = boss;
-      gameState.bossHp = 30;
+        bossFireInterval = setInterval(() => {
+          if (!gameState.bossActive || !boss) {
+            clearInterval(bossFireInterval);
+            return;
+          }
+          const directions = [-2, -1, 0, 1, 2];
+          directions.forEach((dy) => {
+            const bullet = $("<div>").addClass(
+              "absolute w-2 h-1 bg-purple-400"
+            );
+            const bx = boss.position().left;
+            const by = boss.position().top + 30;
+            bullet.css({ left: bx, top: by });
+            bullet.data("dy", dy);
+            gameArea.append(bullet);
+            gameState.bossBullets.push(bullet);
+          });
+        }, 1000);
+      }
 
-      bossFireInterval = setInterval(() => {
-        if (!gameState.bossActive || !boss) {
-          clearInterval(bossFireInterval);
-          return;
-        }
-        const directions = [-2, -1, 0, 1, 2];
-        directions.forEach(dy => {
-          const bullet = $("<div>").addClass("absolute w-2 h-1 bg-purple-400");
-          const bx = boss.position().left;
-          const by = boss.position().top + 30;
-          bullet.css({ left: bx, top: by });
-          bullet.data("dy", dy);
-          gameArea.append(bullet);
-          gameState.bossBullets.push(bullet);
-        });
-      }, 1000);
-    }
+      function gameOver() {
+        gameState.isGameOver = true;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        if (enemySpawnInterval) clearInterval(enemySpawnInterval);
+        if (bossFireInterval) clearInterval(bossFireInterval);
 
-    function gameOver() {
-      gameState.isGameOver = true;
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-      if (enemySpawnInterval) clearInterval(enemySpawnInterval);
-      if (bossFireInterval) clearInterval(bossFireInterval);
+        let scores = JSON.parse(localStorage.getItem("highScores")) || [];
+        scores.push(gameState.score);
+        scores.sort((a, b) => b - a);
+        scores = scores.slice(0, 10);
+        localStorage.setItem("highScores", JSON.stringify(scores));
 
-      let scores = JSON.parse(localStorage.getItem("highScores")) || [];
-      scores.push(gameState.score);
-      scores.sort((a, b) => b - a);
-      scores = scores.slice(0, 10);
-      localStorage.setItem("highScores", JSON.stringify(scores));
+        const ranking = document.getElementById("ranking");
+        ranking.innerHTML =
+          "<h2 class='text-xl font-bold mb-2'>【ベスト10】</h2>" +
+          scores.map((s, i) => `${i + 1}位：${s}`).join("<br>");
 
-      const ranking = document.getElementById("ranking");
-      ranking.innerHTML = "<h2 class='text-xl font-bold mb-2'>【ベスト10】</h2>" +
-        scores.map((s, i) => `${i + 1}位：${s}`).join("<br>");
+        document.getElementById("gameOverScreen").classList.remove("hidden");
+      }
 
-      document.getElementById("gameOverScreen").classList.remove("hidden");
-    }
+      document.getElementById("restartButton").addEventListener("click", () => {
+        document.getElementById("gameOverScreen").classList.add("hidden");
+        $("#gameArea").find("div, img").not("#player").remove();
+        initializeGameState();
+        startGame();
+      });
 
-    document.getElementById("restartButton").addEventListener("click", () => {
-      document.getElementById("gameOverScreen").classList.add("hidden");
-      $("#gameArea").find("div, img").not("#player").remove();
       initializeGameState();
       startGame();
-    });
-
-    initializeGameState();
-    startGame();
-  </script>
-</body>
+    </script>
+  </body>
 </html>
