@@ -26,6 +26,14 @@
     <audio id="bgm" src="bgm/02 Start ~ Main BGM Lv 0.mp3" loop></audio>
 
     <!-- スタート画面 -->
+
+    <div
+      class="absolute top-4 left-4 text-white text-xl z-[999] pointer-events-none select-none">
+      <div id="score">スコア: 0</div>
+      <div id="life" class="mt-2">❤️❤️❤️</div>
+      <div id="combo" class="mt-2 text-sm text-yellow-300"></div>
+    </div>
+
     <div
       id="startScreen"
       class="fixed inset-0 bg-black text-white flex flex-col items-center justify-center z-50"
@@ -57,13 +65,7 @@
       id="gameArea"
       class="relative w-screen h-screen bg-space overflow-hidden"
     >
-      <div
-        class="absolute top-4 left-4 text-white text-xl z-[999] pointer-events-none select-none"
-      >
-        <div id="score">スコア: 0</div>
-        <div id="life" class="mt-2">❤️❤️❤️</div>
-        <div id="combo" class="mt-2 text-sm text-yellow-300"></div>
-      </div>
+
 
       <img
         id="player"
@@ -337,7 +339,7 @@
                   gameState.boss = null;
                   gameState.bossActive = false;
                   gameState.defeatedEnemies = 0;
-                  gameState.score += 3000;
+                  gameState.score += 10000;
                   scoreDisplay.text(`スコア: ${gameState.score}`);
                 }
               }
@@ -463,9 +465,23 @@
       }
 
       document.getElementById("restartButton").addEventListener("click", () => {
+        // ゲームオーバー画面を非表示
         document.getElementById("gameOverScreen").classList.add("hidden");
+
+        // ゲームエリアの敵・弾などを削除（プレイヤー以外）
         $("#gameArea").find("div, img").not("#player").remove();
+
+        // 状態初期化
         initializeGameState();
+
+        // HUD（スコア・ライフ・コンボ）を明示的に表示
+        $("#score")
+          .text("スコア: " + gameState.score)
+          .removeClass("hidden");
+        $("#life").text("❤️".repeat(gameState.life)).removeClass("hidden");
+        $("#combo").text("").removeClass("hidden");
+
+        // ゲーム開始
         startGame();
       });
     </script>
