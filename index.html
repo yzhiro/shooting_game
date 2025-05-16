@@ -57,11 +57,14 @@
       id="gameArea"
       class="relative w-screen h-screen bg-space overflow-hidden"
     >
-      <div class="absolute top-4 left-4 text-white text-xl z-50">
+      <div
+        class="absolute top-4 left-4 text-white text-xl z-[999] pointer-events-none select-none"
+      >
         <div id="score">スコア: 0</div>
         <div id="life" class="mt-2">❤️❤️❤️</div>
         <div id="combo" class="mt-2 text-sm text-yellow-300"></div>
       </div>
+
       <img
         id="player"
         src="img/player.png"
@@ -446,6 +449,10 @@
         scores.sort((a, b) => b - a);
         scores = scores.slice(0, 10);
         localStorage.setItem("highScores", JSON.stringify(scores));
+
+        lifeDisplay.text("❤️".repeat(gameState.life));
+        scoreDisplay.text(`スコア: ${gameState.score}`);
+        comboDisplay.text("");
 
         const ranking = document.getElementById("ranking");
         ranking.innerHTML =
