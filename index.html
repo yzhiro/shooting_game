@@ -187,9 +187,9 @@
 
       function startGameWithDifficulty(level) {
         const config = {
-          easy: { enemySpeed: 2, bulletSpeed: 12 },
+          easy: { enemySpeed: 2, bulletSpeed: 11 },
           normal: { enemySpeed: 3, bulletSpeed: 10 },
-          hard: { enemySpeed: 4, bulletSpeed: 8 },
+          hard: { enemySpeed: 4, bulletSpeed: 9},
         };
         initializeGameState();
         Object.assign(gameState, config[level]);
